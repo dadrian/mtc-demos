@@ -7,7 +7,7 @@ committed ML-DSA CA cosigner seed so demo runs are reproducible.
 The image builds cactus from `dadrian/cactus` at:
 
 ```text
-03c3608d1258c22d88691ddcc107cd1f19f3cc8a
+a5c9263a697981ffd0c8f8812b02fa33a8798b93
 ```
 
 ## Run
@@ -25,7 +25,7 @@ the CA state.
 The CA is published on the host for quick inspection:
 
 ```sh
-curl http://localhost:14000/directory
+curl --cacert ../ecdsa-ca/root.crt https://localhost:14000/directory
 curl http://localhost:14080/checkpoint
 curl http://localhost:14090/metrics
 ```
@@ -34,8 +34,11 @@ Inside the `mtc-demo` Docker network, other containers can reach the CA by
 Docker DNS at:
 
 ```text
-http://ca.mtc-demo.test:14000/directory
+https://ca.mtc-demo.test:14000/directory
 ```
+
+The ACME listener serves HTTPS with the committed ECDSA P-256 key and
+certificate in `../ecdsa-ca`. Monitoring and metrics remain plain HTTP.
 
 The ACME server uses cactus's `auto-pass` challenge mode, so future demo ACME
 clients do not need DNS-01 or HTTP-01 challenge plumbing just to get a
@@ -47,6 +50,10 @@ certificate.
 `cactus-keygen`. Docker Compose mounts it read-only at cactus's expected
 `/var/lib/cactus/keys/ca-cosigner.seed` path. This is only for repeatable demos
 and must not be used as a real CA key.
+
+The HTTPS root and Cactus serving key in `../ecdsa-ca` are also committed demo
+credentials. They are only used to authenticate the local ACME directory to demo
+clients.
 
 To reset all CA state while keeping the same committed key:
 

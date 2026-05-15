@@ -1,7 +1,7 @@
 FROM nginx:stable
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends dehydrated \
+    && apt-get install -y --no-install-recommends lego \
     && rm -rf /var/lib/apt/lists/*
 
 COPY conf.d/default.conf /etc/nginx/conf.d/default.conf

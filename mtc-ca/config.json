@@ -14,7 +14,9 @@
   },
   "acme": {
     "listen": ":14000",
-    "external_url": "http://ca.mtc-demo.test:14000",
+    "external_url": "https://ca.mtc-demo.test:14000",
+    "tls_cert": "/etc/cactus/tls/cactus.crt",
+    "tls_key": "/etc/cactus/tls/cactus.key",
     "challenge_mode": "auto-pass"
   },
   "monitoring": {

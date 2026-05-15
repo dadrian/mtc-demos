@@ -7,13 +7,15 @@ services:
     container_name: nginx-mtc-acme
     hostname: nginx-mtc-acme
     environment:
-      ACME_DIRECTORY_URL: http://ca.mtc-demo.test:14000/directory
+      ACME_DIRECTORY_URL: https://ca.mtc-demo.test:14000/directory
+      SSL_CERT_FILE: /etc/nginx-mtc-acme/ca/root.crt
       CERT_DNS_NAMES: nginx-mtc-acme.mtc-demo.test,localhost
       CERT_CN: nginx-mtc-acme.mtc-demo.test
     ports:
       - "15443:443"
     volumes:
       - ./state:/var/lib/nginx-mtc-acme
+      - ../ecdsa-ca/root.crt:/etc/nginx-mtc-acme/ca/root.crt:ro
     networks:
       mtc-demo:
         aliases:

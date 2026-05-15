@@ -1,7 +1,7 @@
 FROM golang:1.26-alpine AS builder
 
 ARG CACTUS_REPOSITORY=https://github.com/dadrian/cactus.git
-ARG CACTUS_REF=03c3608d1258c22d88691ddcc107cd1f19f3cc8a
+ARG CACTUS_REF=a5c9263a697981ffd0c8f8812b02fa33a8798b93
 
 RUN apk add --no-cache ca-certificates git
 

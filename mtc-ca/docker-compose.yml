@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
       args:
         CACTUS_REPOSITORY: https://github.com/dadrian/cactus.git
-        CACTUS_REF: 03c3608d1258c22d88691ddcc107cd1f19f3cc8a
+        CACTUS_REF: a5c9263a697981ffd0c8f8812b02fa33a8798b93
     image: mtc-demos/mtc-ca:latest
     container_name: mtc-ca
     hostname: mtc-ca
@@ -16,6 +16,7 @@ services:
     volumes:
       - ./state:/var/lib/cactus
       - ./keys/ca-cosigner.seed:/var/lib/cactus/keys/ca-cosigner.seed:ro
+      - ../ecdsa-ca:/etc/cactus/tls:ro
     networks:
       mtc-demo:
         aliases:
