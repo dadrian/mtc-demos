@@ -43,9 +43,10 @@ certificate.
 
 ## Credentials
 
-`keys/ca-cosigner.seed.b64` is the committed demo credential. The entrypoint
-decodes it into `state/keys/ca-cosigner.seed` on first start. This is only for
-repeatable demos and must not be used as a real CA key.
+`keys/ca-cosigner.seed` is the committed demo credential generated with
+`cactus-keygen`. Docker Compose mounts it read-only at cactus's expected
+`/var/lib/cactus/keys/ca-cosigner.seed` path. This is only for repeatable demos
+and must not be used as a real CA key.
 
 To reset all CA state while keeping the same committed key:
 

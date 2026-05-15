@@ -15,6 +15,7 @@ services:
       - "14090:14090"
     volumes:
       - ./state:/var/lib/cactus
+      - ./keys/ca-cosigner.seed:/var/lib/cactus/keys/ca-cosigner.seed:ro
     networks:
       mtc-demo:
         aliases:

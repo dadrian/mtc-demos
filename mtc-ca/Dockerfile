@@ -16,11 +16,9 @@ RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /out/cactus /usr/local/bin/cactus
 COPY config.json /etc/cactus/config.json
-COPY keys/ca-cosigner.seed.b64 /cactus-demo/keys/ca-cosigner.seed.b64
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 14000 14080 14090
 VOLUME ["/var/lib/cactus"]
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/cactus"]
+CMD ["-config", "/etc/cactus/config.json"]
