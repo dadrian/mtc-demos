@@ -7,7 +7,9 @@ services:
       - "14443:443"
     volumes:
       - ./conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./certs:/etc/nginx/certs:ro
+      - ./certs:/etc/nginx/certs
+      - ./scripts/issue-leaf-and-run.sh:/usr/local/bin/issue-leaf-and-run.sh:ro
+    command: ["/usr/local/bin/issue-leaf-and-run.sh"]
     networks:
       mtc-demo:
         aliases:
