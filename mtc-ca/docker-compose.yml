@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        CACTUS_REPOSITORY: https://github.com/mcpherrinm/cactus.git
-        CACTUS_REF: c7bcec61c45b3dd20964e2839eb9542ee8e7a5cf
+        CACTUS_REPOSITORY: https://github.com/dadrian/cactus.git
+        CACTUS_REF: 682f9622c84108bf2e9c89aaa6788bfeaaa98b81
     image: mtc-demos/mtc-ca:latest
     container_name: mtc-ca
     hostname: mtc-ca
@@ -14,7 +14,7 @@ services:
       - "14080:14080"
       - "14090:14090"
     volumes:
-      - mtc-ca-data:/var/lib/cactus
+      - ./state:/var/lib/cactus
     networks:
       mtc-demo:
         aliases:
@@ -24,6 +24,3 @@ services:
 networks:
   mtc-demo:
     name: mtc-demo
-
-volumes:
-  mtc-ca-data:

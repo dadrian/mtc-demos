@@ -1,13 +1,13 @@
 # MTC Demo CA
 
-This directory runs a local [cactus](https://github.com/mcpherrinm/cactus/tree/main/signer)
+This directory runs a local [cactus](https://github.com/dadrian/cactus/tree/main/signer)
 MTC CA and ACME server in Docker. It is intentionally configured with a
 committed ML-DSA CA cosigner seed so demo runs are reproducible.
 
-The image builds cactus from `mcpherrinm/cactus` at:
+The image builds cactus from `dadrian/cactus` at:
 
 ```text
-c7bcec61c45b3dd20964e2839eb9542ee8e7a5cf
+682f9622c84108bf2e9c89aaa6788bfeaaa98b81
 ```
 
 ## Run
@@ -16,6 +16,11 @@ c7bcec61c45b3dd20964e2839eb9542ee8e7a5cf
 cd mtc-ca
 docker compose up --build
 ```
+
+State is stored in the bind-mounted `state/` directory. That directory contains
+the Merkle tree, checkpoint, ACME state, issued cert database, and the decoded
+demo key seed, so `docker compose stop` / `docker compose start` will preserve
+the CA state.
 
 The CA is published on the host for quick inspection:
 
@@ -39,11 +44,13 @@ certificate.
 ## Credentials
 
 `keys/ca-cosigner.seed.b64` is the committed demo credential. The entrypoint
-decodes it into `/var/lib/cactus/keys/ca-cosigner.seed` on first start. This is
-only for repeatable demos and must not be used as a real CA key.
+decodes it into `state/keys/ca-cosigner.seed` on first start. This is only for
+repeatable demos and must not be used as a real CA key.
 
 To reset all CA state while keeping the same committed key:
 
 ```sh
-docker compose down -v
+docker compose down
+rm -rf state
+docker compose up -d
 ```
