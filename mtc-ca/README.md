@@ -7,7 +7,7 @@ committed ML-DSA CA cosigner seed so demo runs are reproducible.
 The image builds cactus from `dadrian/cactus` at:
 
 ```text
-682f9622c84108bf2e9c89aaa6788bfeaaa98b81
+03c3608d1258c22d88691ddcc107cd1f19f3cc8a
 ```
 
 ## Run

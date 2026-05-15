@@ -1,0 +1,26 @@
+services:
+  nginx-mtc-acme:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mtc-demos/nginx-mtc-acme:latest
+    container_name: nginx-mtc-acme
+    hostname: nginx-mtc-acme
+    environment:
+      ACME_DIRECTORY_URL: http://ca.mtc-demo.test:14000/directory
+      CERT_DNS_NAMES: nginx-mtc-acme.mtc-demo.test,localhost
+      CERT_CN: nginx-mtc-acme.mtc-demo.test
+    ports:
+      - "15443:443"
+    volumes:
+      - ./state:/var/lib/nginx-mtc-acme
+    networks:
+      mtc-demo:
+        aliases:
+          - nginx-mtc-acme
+          - nginx-mtc-acme.mtc-demo.test
+
+networks:
+  mtc-demo:
+    external: true
+    name: mtc-demo
