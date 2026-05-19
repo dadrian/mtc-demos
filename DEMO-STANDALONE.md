@@ -1,4 +1,4 @@
-# MTC Demo Walkthrough
+# Standalone MTC Introduction
 
 > The Paxos algorithm, when presented in plain English, is very simple.
 
