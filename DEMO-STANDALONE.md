@@ -168,25 +168,32 @@ nginx-mldsa: ML-DSA certificate served by stock nginx:stable
 ```
 
 Look at that! Given a server that spoke ML-DSA, and a client that had the
-correct trust anchor, we verified the connection.
+correct trust anchor. We know we verified the connection because the command
+completed.
 
-\TODO: dadrian edited through here
+## Standalone MTC
 
-## 2. Start `mtc-ca`
-
-This starts Cactus. The Cactus CA signs the MTC log state with its committed
-ML-DSA-44 cosigner seed and exposes an ACME directory over HTTPS for local demo
-clients.
+Now let's do the same thing, but with a standalone MTC. OpenSSL doesn't have
+built-in support to issue ML-DSA MTCs like it does for Chonky X.509 ML-DSA
+certificates, so we'll additionally run a test MTC CA from Let's Encrypt called
+Cactus[^1]. Since we're running the CA, we'll also show that we can use a
+normal, out-of-the-box ACME client to request issuance of the standalone MTC.
 
 ```sh
 docker compose -f mtc-ca/docker-compose.yml up -d
 ```
 
+This starts Cactus with an [ML-DSA key as the root of
+trust](./mtc-ca/keys/ca-cosigner.seed). The Cactus CA signs the MTC log state
+with its committed ML-DSA-44 cosigner seed and exposes an ACME directory over
+(non-PQC) HTTPS for local demo clients using the [ECDSA
+root](./ecdsa-ca/root.crt)[^2].
+
+\TODO: Update this to use the X.509 representation of an MTC CA
+
 Successful output looks like:
 
 ```text
-Container mtc-ca  Recreate
-Container mtc-ca  Recreated
 Container mtc-ca  Starting
 Container mtc-ca  Started
 ```
@@ -207,11 +214,18 @@ Expected response:
 {"newNonce":"https://ca.mtc-demo.test:14000/new-nonce","newAccount":"https://ca.mtc-demo.test:14000/new-account","newOrder":"https://ca.mtc-demo.test:14000/new-order"}
 ```
 
-## 3. Start `nginx-mtc-acme`
+Now that the CA is running, let's start up an NGINX server that serves an MTC
+issued by our MTC CA.
 
-This container creates an ML-DSA-44 leaf key, builds a CSR, asks Cactus for a
-standalone MTC over ACME using unmodified lego, writes the returned PEM to its
-mounted state directory, and starts NGINX with that PEM.
+The `nginx-mtc-acme` container creates an ML-DSA-44 leaf key, builds a CSR, asks
+Cactus for a standalone MTC over ACME using unmodified lego, writes the returned
+PEM to its mounted state directory, and starts NGINX with that PEM.
+
+Once again, this is effectively _the exact same flow_ you'd use with NGINX to
+get a pre-quantum HTTPS certificate today.
+
+We have a little bit of extra plumbing to provide the _local_ ACME server for
+the purposes of the demo, but that's it.
 
 ```sh
 docker compose -f nginx-mtc-acme/docker-compose.yml up -d --build
@@ -260,6 +274,14 @@ Expected response:
 ```text
 nginx-mtc-acme: standalone MTC from ACME with an ML-DSA leaf key
 ```
+
+Note that this time, we're passing `--insecure` to curl, because curl doesn't
+yet support verifying a standalone MTC. But if it did, we'd remove `--insecure`
+and pass `--cacert /path/to/mtc/root.pem`. Again, this would be the _exact same
+setup_ we used for Chonky X.509, just with a different trust anchor.
+
+\TODO: dadrian this would be more compelling if we could show it working with BoringSSL
+
 
 ## Get the ordinary ML-DSA X.509 certificate as PEM
 
@@ -1031,3 +1053,8 @@ signature value carries the MTC proof data rather than a normal issuer signature
 [mtcs]: https://datatracker.ietf.org/doc/draft-ietf-plants-merkle-tree-certs/
 [transparency]: https://certificate.transparency.dev/
 [diginotar]: https://security.googleblog.com/2011/08/update-on-attempted-man-in-middle.html
+
+[^1]: Technnically we're running my fork of Cactus to make it play nice for this demo, but the point stands.
+[^2]: We're using a local root here so the ACME clients can still have an HTTPS
+  URL. We're using ECDSA because ML-DSA support (and MTC support) is obviously not
+  yet widely available in clients.
