@@ -1,6 +1,38 @@
 # MTC Demo Walkthrough
 
-This repo demonstrates that standalone Merkle Tree Certificates (MTCs) are look like ordinary X.509 certificates to the software that serves them; the only difference is the `signatureAlorithm` OID.
+> The Paxos algorithm, when presented in plain English, is very simple.
+
+A standalone MTC, when consumed by a server, is very simple! Standalone Merkle
+Tree Certificates (MTCs) look like ordinary X.509 certificates to the software
+that serves them; the only difference is the `signatureAlorithm` OID.
+
+Don't believe me? Well, let's define a couple requirements, and then go through
+a few examples.
+
+Certificates are relevant to _authenticating_ an HTTPS connection. For the
+public Web PKI, we also want an additional property, _transparency_, meaning
+that there is cryptographic proof that every certificate is _publicly logged_.
+Historically, transparency has come from the [certificate
+transparency (CT)][transparency] ecosystem. While not perfect, the existence of transparency
+is what prevents CAs from being the juiciest possible target for malicious
+actors. For a maliciously issued certificate to actually be used to authenticate
+a website, it needs to be disclosed, which ultimately reduces the efficacy of
+malicious issuance as an attack vector, compared to [the before
+times][diginotar].
+
+For HTTPS, there are effectively two options for post-quantum certificates:
+- **Chonky X.509**, where we simply copy/paste key and signature algorithms from
+  pre-quantum to post-quantum. Effectively, anywhere an RSA or ECDSA key or
+  signature was used, we use an ML-DSA key or signature instead. Transparency
+  would then be layered in via CT.
+- **Merkle Tree Certificates (MTCs)**, which are a mechanism for embedding
+  [transparency information][transparency] directly into an X.509 certificate.
+
+MTCs can technically be used with an key type, but for the purposes of this,
+let's assume we're always talking about MTCs with ML-DSA, the post-quantum
+signature algorithm.
+
+\TODO dadrian keep writing
 
 To use ML-DSA with OpenSSL and NGINX, you need at least OpenSSL 3.5. This is not
 yet available on MacOS without Homebrew. For compatibility for ML-DSA
@@ -916,3 +948,6 @@ Public Key Algorithm: ML-DSA-44
 That signature algorithm OID is the Cactus MTC proof marker. The certificate is
 still encoded as an X.509 certificate and is served by stock NGINX, but the
 signature value carries the MTC proof data rather than a normal issuer signature.
+
+[mtcs]: https://datatracker.ietf.org/doc/draft-ietf-plants-merkle-tree-certs/
+[transparency]: https://certificate.transparency.dev/
