@@ -12,11 +12,11 @@ a few examples.
 Certificates are relevant to _authenticating_ an HTTPS connection. For the
 public Web PKI, we also want an additional property, _transparency_, meaning
 that there is cryptographic proof that every certificate is _publicly logged_.
-Historically, transparency has come from the [certificate
-transparency (CT)][transparency] ecosystem. While not perfect, the existence of transparency
+Historically, transparency has come from the [certificate transparency
+(CT)][transparency] ecosystem. While not perfect, the existence of transparency
 is what prevents CAs from being the juiciest possible target for malicious
-actors. For a maliciously issued certificate to actually be used to authenticate
-a website, it needs to be disclosed, which ultimately reduces the efficacy of
+actors. For a maliciously-issued certificate to be used to authenticate a
+website, it needs to be disclosed, which ultimately reduces the efficacy of
 malicious issuance as an attack vector, compared to [the before
 times][diginotar].
 
@@ -24,60 +24,134 @@ For HTTPS, there are effectively two options for post-quantum certificates:
 - **Chonky X.509**, where we simply copy/paste key and signature algorithms from
   pre-quantum to post-quantum. Effectively, anywhere an RSA or ECDSA key or
   signature was used, we use an ML-DSA key or signature instead. Transparency
-  would then be layered in via CT.
+  would then be layered in via CT for the public PKI, but could be excluded for
+  private PKIs where the issuer and authenticating party are the same.
 - **Merkle Tree Certificates (MTCs)**, which are a mechanism for embedding
   [transparency information][transparency] directly into an X.509 certificate.
 
 MTCs can technically be used with an key type, but for the purposes of this,
 let's assume we're always talking about MTCs with ML-DSA, the post-quantum
-signature algorithm.
+signature algorithm. MTCs are still X.509 certificates, however the contents and
+expectations around the signature algorithm used on the certificate change.
 
-\TODO dadrian keep writing
+While an MTC CA needs to operate a tree, an MTC itself is just a certificate
+with a fancy signature algorithm. MTCs come in two variants---the larger
+_standalone_ certificate, and smaller _landmark-relative_ certificate. In both
+cases, the MTC part of the certificate is entirely contained within the
+`signatureAlgorithm` field in the certificate. The certificate is still X.509,
+and the key in the certificate of the end-entity (i.e. the web server) is a
+normal ML-DSA key. For a server to use either form of MTC to authenticate itself
+(assuming it has obtained one---more on that another time), it just needs to be
+able to sign with the end-entity key. Servers don't actually interact with the
+_signature_ from the CA!
+
+Let's look at this from the clients perspective. First, back to chonky X.509.
+What would the client need to verify a chonky X.509 ML-DSA certificate? Well,
+the client would need some sort of representation of the trust anchor, probably
+an X.509 root certificate in PEM format, to provide a root of trust. It also
+needs to understand some new (relative to pre-quantum) algorithmIdentifier, \TK,
+and understand that identifier means ML-DSA, and its X.509 stack needs to be
+updated to know how to verify a signature using the indicated algorithm.
+
+What about a standalone MTC? Well, once again, the client would need some sort
+of representation on an MTC CA, likely an X.509 certificate in PEM format. It
+also needs to understand some new (relative to pre-quantum)
+`algorithmIdentifier`, \TK, and understand that identifier means "ML-DSA in a
+Merkle Tree", and then its X.509 stack needs be updated to know how to verify
+using the indicated algorithm.
+
+You might notice that these are effectively the same requirements, the only
+difference is _what_ algorithm is executed by the verifier in the X.509 stack.
+With Chonky X.509, the algorithm is "feed the bytes of the certificate into
+ML-DSA Verify()". With Chonky X.509, the algorithm is "\TODO". In both cases,
+all of the information needed to verify the certificate is contained in the
+signatureAlgorithm, and the only update required for the client is to speak the
+new signature algorithm, and the only data the client needs to bootstrap the
+verification is an X.509 certificate to use as a trust anchor.
+
+For clients, the situation is slightly more complicated for landmark-relative
+certificates. We'll save that for another demo.
+
+At this point, you might be lost, so let's look at two things:
+1. Configuring a server and client to use a Chonk X.509 ML-DSA certificate and root
+2. Configuring a server and client to use an MTC certificate and MTC CA
+
+For both examples, we'll use NGINX as our web server with an out-of-the box
+OpenSSL 3.5.
+
+## Requirements
 
 To use ML-DSA with OpenSSL and NGINX, you need at least OpenSSL 3.5. This is not
 yet available on MacOS without Homebrew. For compatibility for ML-DSA
 operations, the walkthrough uses short-lived `nginx:stable` helper containers
 because that image currently has OpenSSL 3.5.x and curl built against it.
 
-## Docker Containers
+All the examples here are orchestrated with Docker Compose, so you'll need that
+if you want to follow along in your terminal. The Docker network name for allJ
+examples (so they can talk to each other) is `mtc-demo`.
 
-- `nginx-mldsa/` runs stock `nginx:stable` with an ordinary X.509 leaf
-  certificate whose key and issuer signature are both ML-DSA-44.
-- `mtc-ca/` runs the local Cactus MTC CA and ACME server. It uses a committed
-  ML-DSA-44 CA cosigner seed and stores its Merkle tree plus ACME state in the
-  mounted `mtc-ca/state/` directory.
-- `nginx-mtc-acme/` runs stock `nginx:stable`, uses unmodified lego over ACME
-  to request a standalone MTC for an ML-DSA-44 leaf key, then serves that MTC as
-  its TLS certificate.
+## Chonky X.509
 
-The Docker network name used by the examples is `mtc-demo`.
-
-The PEM and `openssl x509 -text` blocks below are sample output from one run.
-If you delete generated state or reissue certificates, serial numbers, validity
-times, keys, signatures, and MTC proof bytes will differ.
-
-## 1. Start `nginx-mldsa`
+Let's start out with Chonky X.509 without transparency. ML-DSA isn't defined
+publicly trusted certificates, so we'll use our own [ML-DSA root
+certificate](./nginx-mldsa/certs/root.key) as a trust anchor.
 
 This is the baseline: an ordinary X.509 certificate, directly issued by a demo
-root, where the leaf public key and certificate signatures are ML-DSA-44. This is standard, but "chonky" X.509 using ML-DSA signatures, without an intermediate certificate.
+root, where the leaf public key and certificate signatures are ML-DSA-44. This
+is standard, but Chonky X.509 using ML-DSA signatures, without an intermediate
+certificate.
+
+## 1. Start `nginx-mldsa`
 
 ```sh
 docker compose -f nginx-mldsa/docker-compose.yml up -d
 ```
 
-Successful output looks like:
-
-```text
-Container nginx-mldsa  Running
-```
-
 On first execution, the container creates a new ML-DSA-44 leaf at startup and
 signs it with the committed ML-DSA-44 demo root, storing it in
-`nginx-mldsa/certs`.
+`nginx-mldsa/certs`. Normally, this certificate would come from ACME or some
+other mechanism for communicating with a CA. The scripting for issuing the
+certificate isn't important---what is important is "how do we configure NGINX to
+use it?". You can [view the file directly](./nginx-mldsa/conf.d/default.conf), or
+just look at the relevant bits below.
 
-\TODO: THIS IS HOW FAR DAVID GOT EDITING. THIS WHOLE DOCUMENT NEEDS WORK.
+```
+server {
 
-Check that NGINX responds:
+    # ...
+    ssl_protocols TLSv1.3;
+
+    ssl_certificate /etc/nginx/certs/leaf.crt;
+    ssl_certificate_key /etc/nginx/certs/leaf.key;
+
+    # ...
+}
+```
+
+From the server's perspective, we needed two things:
+1. An OpenSSL that supported ML-DSA
+2. A certificate that use ML-DSA
+
+Actually getting certificates can be complicated! I'm not downplaying it! But
+fundamentally, this configuration is the exact same as what you might apply if
+you were serving an RSA or ECDSA certificate instead.
+
+Let's look at what it would take to get a client, such as curl, to verify a
+connection using this certificate. To do that, we need:
+1. A version of curl that supports ML-DSA
+2. To specify our root CA as a trust anchor.
+
+The standalone curl command would be:
+
+```sh
+curl --fail --silent --show-error --cacert ./nginx-mldsa/root.crt https://nginx-mldsa.mtc-demo.test
+```
+
+The `--cacert` specifies our trust anchor, and the other flags just make curl
+shut up but still output errors sanely. Since our server is running on a Docker
+network, we'll run the same command but jammed through the `nginx:stable` Docker
+image with `root.crt`. This also guarantees we'll have an up-to-date curl that
+supports ML-DSA.
 
 ```sh
 docker run --rm --network mtc-demo \
@@ -92,6 +166,11 @@ Expected response:
 ```text
 nginx-mldsa: ML-DSA certificate served by stock nginx:stable
 ```
+
+Look at that! Given a server that spoke ML-DSA, and a client that had the
+correct trust anchor, we verified the connection.
+
+\TODO: dadrian edited through here
 
 ## 2. Start `mtc-ca`
 
@@ -951,3 +1030,4 @@ signature value carries the MTC proof data rather than a normal issuer signature
 
 [mtcs]: https://datatracker.ietf.org/doc/draft-ietf-plants-merkle-tree-certs/
 [transparency]: https://certificate.transparency.dev/
+[diginotar]: https://security.googleblog.com/2011/08/update-on-attempted-man-in-middle.html
