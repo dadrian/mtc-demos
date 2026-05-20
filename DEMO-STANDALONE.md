@@ -1,79 +1,89 @@
-# Standalone MTC Introduction
+# Standalone MTC Demo
 
-> The Paxos algorithm, when presented in plain English, is very simple.
-
-A standalone MTC, when consumed by a server, is very simple! Standalone Merkle
-Tree Certificates (MTCs) look like ordinary X.509 certificates to the software
-that serves them; the only difference is the `signatureAlorithm` OID.
+A standalone MTC, when consumed by a server, is very simple[^3]! Standalone
+Merkle Tree Certificates (MTCs) look like ordinary X.509 certificates to the
+software that serves them; the only difference is the `signatureAlorithm` OID.
 
 Don't believe me? Well, let's define a couple requirements, and then go through
 a few examples.
 
-Certificates are relevant to _authenticating_ an HTTPS connection. For the
-public Web PKI, we also want an additional property, _transparency_, meaning
-that there is cryptographic proof that every certificate is _publicly logged_.
-Historically, transparency has come from the [certificate transparency
-(CT)][transparency] ecosystem. While not perfect, the existence of transparency
-is what prevents CAs from being the juiciest possible target for malicious
-actors. For a maliciously-issued certificate to be used to authenticate a
-website, it needs to be disclosed, which ultimately reduces the efficacy of
-malicious issuance as an attack vector, compared to [the before
-times][diginotar].
+Certificates are relevant to _authenticating_ an HTTPS connection, meaning they
+bind a public key to a name. For the public Web PKI, we also want an additional
+property, _transparency_, meaning that there is cryptographic proof that every
+certificate issued by a publicly trusted certification authority (CA) is
+_publicly logged_. This means that the full set of publicly trusted certificates
+at any time is known, and there are no "secret" certificates. Historically,
+transparency has come from the [certificate transparency (CT)][transparency]
+ecosystem. While not perfect, the existence of transparency is what prevents CAs
+from being the highest-value target for attackers. For a maliciously-issued
+certificate to be used to authenticate a website, it needs to be disclosed,
+which ultimately reduces the efficacy of malicious issuance as an attack vector,
+compared to [the before times][diginotar].
 
 For HTTPS, there are effectively two options for post-quantum certificates:
 - **Chonky X.509**, where we simply copy/paste key and signature algorithms from
   pre-quantum to post-quantum. Effectively, anywhere an RSA or ECDSA key or
   signature was used, we use an ML-DSA key or signature instead. Transparency
   would then be layered in via CT for the public PKI, but could be excluded for
-  private PKIs where the issuer and authenticating party are the same.
+  private PKIs where the issuer and authenticating party are the same. This is
+  referred to as "chonky" because ML-DSA keys and signatures [are very
+  big][dadrian-pqc-size], and the current approach to X.509 certificates with
+  transparency involves transmitting five signatures and two public keys for
+  every TLS connection.
 - **Merkle Tree Certificates (MTCs)**, which are a mechanism for embedding
-  [transparency information][transparency] directly into an X.509 certificate.
+  [transparency information][transparency] directly into an X.509 certificate by making issuance be a signature over an inclusion proof in a merkle tree.
 
 MTCs can technically be used with an key type, but for the purposes of this,
 let's assume we're always talking about MTCs with ML-DSA, the post-quantum
 signature algorithm. MTCs are still X.509 certificates, however the contents and
 expectations around the signature algorithm used on the certificate change.
 
-While an MTC CA needs to operate a tree, an MTC itself is just a certificate
-with a fancy signature algorithm. MTCs come in two variants---the larger
-_standalone_ certificate, and smaller _landmark-relative_ certificate. In both
-cases, the MTC part of the certificate is entirely contained within the
-`signatureAlgorithm` field in the certificate. The certificate is still X.509,
-and the key in the certificate of the end-entity (i.e. the web server) is a
-normal ML-DSA key. For a server to use either form of MTC to authenticate itself
-(assuming it has obtained one---more on that another time), it just needs to be
-able to sign with the end-entity key. Servers don't actually interact with the
-_signature_ from the CA!
+While an MTC CA needs to operate a merkle tree, which is outside the scope of
+this demo, an MTC itself is just a certificate with a fancy signature algorithm.
+MTCs come in two variants---the larger _standalone_ certificate, and smaller
+_landmark-relative_ certificate. In both cases, the MTC part of the certificate
+is entirely contained within the `signatureAlgorithm` field in the certificate.
+The certificate is still X.509, and the key in the certificate of the end-entity
+(i.e. the web server) is a normal ML-DSA key. For a server to use either form of
+MTC to authenticate itself (assuming it has obtained one---more on that another
+time), it just needs to be able to sign with the end-entity key. Servers don't
+actually interact with the _signature_ from the CA!
 
 Let's look at this from the clients perspective. First, back to chonky X.509.
 What would the client need to verify a chonky X.509 ML-DSA certificate? Well,
 the client would need some sort of representation of the trust anchor, probably
 an X.509 root certificate in PEM format, to provide a root of trust. It also
-needs to understand some new (relative to pre-quantum) algorithmIdentifier, \TK,
-and understand that identifier means ML-DSA, and its X.509 stack needs to be
-updated to know how to verify a signature using the indicated algorithm.
+needs to understand some new (relative to pre-quantum) algorithm identifier,
+`id-ml-dsa-*`, and understand that identifier means "ML-DSA signature over the
+certificate body", and its X.509 stack needs to be updated to know how to verify
+a certificate using the indicated algorithm.
 
 What about a standalone MTC? Well, once again, the client would need some sort
 of representation on an MTC CA, likely an X.509 certificate in PEM format. It
-also needs to understand some new (relative to pre-quantum)
-`algorithmIdentifier`, \TK, and understand that identifier means "ML-DSA in a
-Merkle Tree", and then its X.509 stack needs be updated to know how to verify
-using the indicated algorithm.
+also needs to understand some new (relative to pre-quantum) algorithm
+identifier, `id-alg-mtcProof`, and understand that identifier means "signature
+over an inclusion proof", and then its X.509 stack needs be updated to know how
+to verify a certificate using the indicated algorithm.
 
 You might notice that these are effectively the same requirements, the only
 difference is _what_ algorithm is executed by the verifier in the X.509 stack.
-With Chonky X.509, the algorithm is "feed the bytes of the certificate into
-ML-DSA Verify()". With Chonky X.509, the algorithm is "\TODO". In both cases,
-all of the information needed to verify the certificate is contained in the
-signatureAlgorithm, and the only update required for the client is to speak the
-new signature algorithm, and the only data the client needs to bootstrap the
-verification is an X.509 certificate to use as a trust anchor.
+For a Chonky X.509 certificate, the algorithm is "feed the bytes of the
+certificate into ML-DSA Verify()". For a standalone MTC, the algorithm is "use
+the inclusion proof and certificate body to construct a subtree hash, and then
+feed bytes of the subtree hash into ML-DSA Verify()". For both Chonky X.509 and
+Standalone MTCs, all of the information needed to verify the certificate is
+contained in the value of the signature and indicated by the
+`signatureAlgorithm`.  In both cases, the required update for the client is to a
+speak a new signature algorithm, something that necessarily needs to happen
+anyway to add support for PQC. And in both cases, the only data the client needs
+to bootstrap the verification is an X.509 certificate to use as a trust anchor.
 
-For clients, the situation is slightly more complicated for landmark-relative
-certificates. We'll save that for another demo.
+The situation is slightly more complicated for landmark-relative certificates or
+cosigner-enforcing clients. We'll save that for another demo.
 
 At this point, you might be lost, so let's look at two things:
-1. Configuring a server and client to use a Chonk X.509 ML-DSA certificate and root
+1. Configuring a server and client to use a Chonk X.509 ML-DSA certificate and
+  root
 2. Configuring a server and client to use an MTC certificate and MTC CA
 
 For both examples, we'll use NGINX as our web server with an out-of-the box
@@ -81,16 +91,11 @@ OpenSSL 3.5.
 
 ## Requirements
 
-To use ML-DSA with OpenSSL and NGINX, you need at least OpenSSL 3.5. This is not
-yet available on MacOS without Homebrew. For compatibility for ML-DSA
-operations, the walkthrough uses short-lived `nginx:stable` helper containers
-because that image currently has OpenSSL 3.5.x and curl built against it.
-
 All the examples here are orchestrated with Docker Compose, so you'll need that
-if you want to follow along in your terminal. The Docker network name for allJ
-examples (so they can talk to each other) is `mtc-demo`.
+if you want to follow along in your terminal. The Docker network name (so the
+containers can all talk to each other) is `mtc-demo`.
 
-## Chonky X.509
+### Chonky X.509
 
 Let's start out with Chonky X.509 without transparency. ML-DSA isn't defined
 publicly trusted certificates, so we'll use our own [ML-DSA root
@@ -101,7 +106,7 @@ root, where the leaf public key and certificate signatures are ML-DSA-44. This
 is standard, but Chonky X.509 using ML-DSA signatures, without an intermediate
 certificate.
 
-## 1. Start `nginx-mldsa`
+#### 1. Start `nginx-mldsa`
 
 ```sh
 docker compose -f nginx-mldsa/docker-compose.yml up -d
@@ -111,7 +116,7 @@ On first execution, the container creates a new ML-DSA-44 leaf at startup and
 signs it with the committed ML-DSA-44 demo root, storing it in
 `nginx-mldsa/certs`. Normally, this certificate would come from ACME or some
 other mechanism for communicating with a CA. The scripting for issuing the
-certificate isn't important---what is important is "how do we configure NGINX to
+certificate isn't important---what's important is "how do we configure NGINX to
 use it?". You can [view the file directly](./nginx-mldsa/conf.d/default.conf), or
 just look at the relevant bits below.
 
@@ -471,8 +476,10 @@ with "just" a signature from a trusted CA.
 [mtcs]: https://datatracker.ietf.org/doc/draft-ietf-plants-merkle-tree-certs/
 [transparency]: https://certificate.transparency.dev/
 [diginotar]: https://security.googleblog.com/2011/08/update-on-attempted-man-in-middle.html
+[dadrian-pqc-size]: https://dadrian.io/blog/posts/pqc-signatures-2024/
 
 [^1]: Technnically we're running my fork of Cactus to make it play nice for this demo, but the point stands.
 [^2]: We're using a local root here so the ACME clients can still have an HTTPS
   URL. We're using ECDSA because ML-DSA support (and MTC support) is obviously not
   yet widely available in clients.
+[^3]: The Paxos algorithm, when presented in plain English, is very simple.
