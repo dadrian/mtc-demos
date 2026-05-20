@@ -488,7 +488,7 @@ a Yes/No.
 
 [Neat!](https://www.youtube.com/watch?v=u6RNtjYxiNw)
 
-## But what about consigners!?!?!?!
+## But what about cosigners!?!?!?!
 
 Future demos to come!
 
