@@ -321,7 +321,7 @@ docker run --rm --network mtc-demo \
     https://nginx-mldsa.mtc-demo.test/ | \
     sed -n "/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p" | \
     tee demo-chonky.pem | \
-    openssl x509 -text -noout
+    openssl x509 -text -noout'
 ```
 This writes the certificate to `demo-chonky.pem` and shows you the parsed
 output. I've elided some of it here, but you can look at [the full
@@ -384,7 +384,7 @@ docker run --rm --network mtc-demo nginx:stable \
     https://nginx-mtc-acme.mtc-demo.test/ | \
     sed -n "/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p" | \
     tee demo-standalone.pem | \
-    openssl x509 -text -noout
+    openssl x509 -text -noout'
 ```
 
 This saves it to `demo-standalone.pem` and prints the text representation. Once again, I've included an elided version of it here:
