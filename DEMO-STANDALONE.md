@@ -40,14 +40,16 @@ expectations around the signature algorithm used on the certificate change.
 
 While an MTC CA needs to operate a merkle tree, which is outside the scope of
 this demo, an MTC itself is just a certificate with a fancy signature algorithm.
-MTCs come in two variants---the larger _standalone_ certificate, and smaller
-_landmark-relative_ certificate. In both cases, the MTC part of the certificate
-is entirely contained within the `signatureAlgorithm` field in the certificate.
-The certificate is still X.509, and the key in the certificate of the end-entity
-(i.e. the web server) is a normal ML-DSA key. For a server to use either form of
-MTC to authenticate itself (assuming it has obtained one---more on that another
-time), it just needs to be able to sign with the end-entity key. Servers don't
-actually interact with the _signature_ from the CA!
+MTCs come in two variants. There's the larger _standalone_ certificate, which
+can be verified without any out-of-band data, and smaller _landmark-relative_
+certificate, with requires out-of-band delivery of landmarks. In both cases, the
+MTC part of the certificate is entirely contained within the
+`signatureAlgorithm` field in the certificate.  The certificate is still X.509,
+and the key in the certificate of the end-entity (i.e. the web server) is a
+normal ML-DSA key. For a server to use either form of MTC to authenticate itself
+(assuming it has obtained one, more on that another time), it just needs to be
+able to sign with the end-entity key. Servers don't actually interact with the
+_signature_ from the CA!
 
 Let's look at this from the clients perspective. First, back to chonky X.509.
 What would the client need to verify a chonky X.509 ML-DSA certificate? Well,
@@ -116,11 +118,11 @@ On first execution, the container creates a new ML-DSA-44 leaf at startup and
 signs it with the committed ML-DSA-44 demo root, storing it in
 `nginx-mldsa/certs`. Normally, this certificate would come from ACME or some
 other mechanism for communicating with a CA. The scripting for issuing the
-certificate isn't important---what's important is "how do we configure NGINX to
-use it?". You can [view the file directly](./nginx-mldsa/conf.d/default.conf), or
-just look at the relevant bits below.
+certificate isn't important. Instead, focus on "how do we configure NGINX to use
+it?". You can [view the file directly](./nginx-mldsa/conf.d/default.conf), or
+look at the relevant bits below.
 
-```
+```nginx
 server {
 
     # ...
@@ -227,7 +229,22 @@ Cactus for a standalone MTC over ACME using unmodified lego, writes the returned
 PEM to its mounted state directory, and starts NGINX with that PEM.
 
 Once again, this is effectively _the exact same flow_ you'd use with NGINX to
-get a pre-quantum HTTPS certificate today.
+get a pre-quantum HTTPS certificate today. Not only is it the exact same flow,
+but it's basically using the exact same
+[configuration](./nginx-mtc-acme/conf.d/default.conf).
+
+```nginx
+server {
+
+    # ...
+    ssl_protocols TLSv1.3;
+
+    ssl_certificate /var/lib/nginx-mtc-acme/certs/leaf.crt;
+    ssl_certificate_key /var/lib/nginx-mtc-acme/private/leaf.key;
+
+    # ...
+}
+```
 
 We have a little bit of extra plumbing to provide the _local_ ACME server for
 the purposes of the demo, but that's it.
@@ -289,7 +306,7 @@ setup_ we used for Chonky X.509, just with a different trust anchor.
 
 ### A side note about OpenSSL
 
-I lied a little---we had to do a slight bit of [extra configuration for
+I lied a little. We had to do a slight bit of [extra configuration for
 OpenSSL](./nginx-mtc-acme/openssl-mtc.cnf). This is because OpenSSL currently
 rejects unknown signature algorithms as "too weak" when operating as a server.
 This doesn't make any sense because servers do not need to process or otherwise
@@ -420,7 +437,10 @@ Certificate:
         00:0f:2a:37:45
 ```
 
-What's different from the Chonky X.509 certificate? Well, the issuer name is now also just an identifier, and the signature algorithm uses a different identifier than the Chonky certificate. Other than that, everything is the same. To be explicit, the Chonky X.509 ML-DSA certificate from `nginx-mldsa` has:
+What's different from the Chonky X.509 certificate? Well, the issuer name is now
+also just an identifier, and the signature algorithm uses a different identifier
+than the Chonky certificate. Other than that, everything is the same. To be
+explicit, the Chonky X.509 ML-DSA certificate from `nginx-mldsa` has:
 
 ```text
 Signature Algorithm: ML-DSA-44
@@ -436,42 +456,58 @@ Public Key Algorithm: ML-DSA-44
 Issuer: 1.3.6.1.4.1.44363.47.1=1.3.6.1.4.1.44363.47.42.1
 ```
 
-The difference is that the `Signature` field now carries an MTC proof, rather than "just" an ML-DSA signature over the bytes of the certificate. Here's the actual schema for the `Signature` fields
+The difference is that the `Signature` field now carries an MTC proof, rather
+than "just" an ML-DSA signature over the bytes of the certificate. Here's the
+actual schema for the `Signature` fields
 
 Chonky X.509:
 
 ```text
+Signature BIT STRING
 ```
 
 Standalone MTC:
 ```text
+Signature := MTCProof;
+
+MTCProof {
+  uint64 start;
+  uint64 end;
+  HashValue inclusion_proof<...>;
+  MTCSignature signatures<...>;
+}
 ```
 
-For a standalone MTC, everything needed to verify the MTC proof structure is contained in the X.509 representation of the MTC CA. So an MTC aware client effectively loops over the \TK structure in the MTC proof (i.e. the value of the `Signature` field in an MTC) to calculate a \TK, and then verifies the ML-DSA signature in \TK is over that hash, whereas in Chonky X.509 the client just verifies the ML-DSA signature is over the bytes of the certificate.
+For a standalone MTC, everything needed to verify the MTC proof structure is
+contained in the X.509 representation of the MTC CA. So an MTC aware client
+builds the expected subtree hash using the `inclusion_proof`, and then verifies
+it against the raw signature bytes in the `signatures` field.  For both
+standalone MTCs and chonky X.509, verification remains an algorithm where the inputs
+are a set of trust anchors, and the bytes of the certificate, and the output is
+a Yes/No.
 
-But in both cases, verification remains an algorithm who's inputs are a set of trust anchors, and the bytes of the certificate, and the output is a Yes/No.
-
-Neat!
+[Neat!](https://www.youtube.com/watch?v=u6RNtjYxiNw)
 
 ## But what about consigners!?!?!?!
 
-Future demos to come! But you're right that we don't verify any of the
-cosignatures here (and in fact, there aren't any!). That's because cosigners
-only provide transparency, and the current state of the world is that clients
-without log list or landmark distribution mechanisms don't really enforce
-transparency. So neither does this demo. We expect the default behavior of
-non-transparency enforcing verifiers to ignore cosignatures and just trust the
-CA signature to mean that the CA did the right thing.
+Future demos to come!
+
+You may have noticed that `MTCProof.MTCSignature` is actually a list of
+signatures. Only one of them will be from the CA, the others will be from the
+cosigners. This provides transparency.
+
+You're right that we don't verify any of the cosignatures here (and in fact,
+there aren't any!). That's because cosigners only provide transparency, and the
+current state of the world is that clients without log list or landmark
+distribution mechanisms don't really enforce transparency. So neither does this
+demo. We expect the default behavior of non-transparency enforcing verifiers to
+ignore the non-CA signatures and trust the CA signature to mean that the CA did the
+right thing. This is the same property that clients currently get from a
+"normal" CA signature, and would get from a Chonky X.509 signature.
 
 The point of this demo is to show that a standalone MTC is effectively as
 achievable as Chonky X.509 for basic clients, with the exact same communication
 paths from CA to server to client, and root store to client.
-
-What we get from a standalone MTC is actually a greater commitment tha a normal
-X.509 certificate with unverified SCTs---the CA operator would still need to
-create a split view _just to issue the certificate_, whereas dummy (or no SCTs)
-could be provided to non-transparency-enforcing clients currently in conjunction
-with "just" a signature from a trusted CA.
 
 [mtcs]: https://datatracker.ietf.org/doc/draft-ietf-plants-merkle-tree-certs/
 [transparency]: https://certificate.transparency.dev/
